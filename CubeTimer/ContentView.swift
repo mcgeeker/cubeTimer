@@ -17,7 +17,7 @@ func formatTime(_ time: TimeInterval) -> String {
 }
 
 struct UserProfile: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     var name: String
     var bestTime: TimeInterval = 0
     var lastTime: TimeInterval = 0
@@ -28,7 +28,7 @@ struct UserProfile: Codable, Identifiable {
 }
 
 struct SolveRecord: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     let time: TimeInterval
     let date: Date
     
@@ -230,8 +230,8 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                             
                             LazyVGrid(columns: [
-                                GridColumn(.flexible()),
-                                GridColumn(.flexible())
+                                GridItem(.flexible()),
+                                GridItem(.flexible())
                             ], spacing: 12) {
                                 StatCard(title: "Best", value: formatTime(currentProfile.bestTime), color: .green)
                                 StatCard(title: "Last", value: formatTime(currentProfile.lastTime), color: .blue)
@@ -460,7 +460,7 @@ struct ContentView: View {
     }
     
     }
-}
+
 
 struct StatCard: View {
     let title: String
@@ -636,34 +636,37 @@ struct HistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showingChart = false
     
-    var statistics: (bestTime: TimeInterval, averageTime: TimeInterval, medianTime: TimeInterval, standardDeviation: TimeInterval) {
-        let times = profile.history.map { $0.time }
-        let sortedTimes = times.sorted()
-        
-        let bestTime = profile.bestTime
-        let averageTime = times.isEmpty ? 0 : times.reduce(0, +) / Double(times.count)
-        
-        let medianTime: TimeInterval
-        if sortedTimes.isEmpty {
-            medianTime = 0
-        } else if sortedTimes.count % 2 == 0 {
+    // Precomputed arrays to keep the compiler happy
+    private var times: [TimeInterval] { profile.history.map { $0.time } }
+    private var sortedTimes: [TimeInterval] { times.sorted() }
+
+    private var bestTimeComputed: TimeInterval { profile.bestTime }
+    private var averageTimeComputed: TimeInterval {
+        guard !times.isEmpty else { return 0 }
+        return times.reduce(0, +) / Double(times.count)
+    }
+    private var medianTimeComputed: TimeInterval {
+        guard !sortedTimes.isEmpty else { return 0 }
+        if sortedTimes.count % 2 == 0 {
             let mid = sortedTimes.count / 2
-            medianTime = (sortedTimes[mid - 1] + sortedTimes[mid]) / 2
+            return (sortedTimes[mid - 1] + sortedTimes[mid]) / 2
         } else {
-            medianTime = sortedTimes[sortedTimes.count / 2]
+            return sortedTimes[sortedTimes.count / 2]
         }
-        
-        let standardDeviation: TimeInterval
-        if times.count < 2 {
-            standardDeviation = 0
-        } else {
-            // Sample standard deviation (n − 1)
-            let mean = averageTime
-            let sse = times.reduce(0) { $0 + pow($1 - mean, 2) }
-            standardDeviation = sqrt(sse / Double(times.count - 1))
+    }
+    private var stdDevSampleComputed: TimeInterval {
+        let n = times.count
+        guard n > 1 else { return 0 }
+        let mean = averageTimeComputed
+        let sse = times.reduce(0) { partial, t in
+            let d = t - mean
+            return partial + d * d
         }
-        
-        return (bestTime, averageTime, medianTime, standardDeviation)
+        return sqrt(sse / Double(n - 1))
+    }
+
+    private var historySortedDesc: [SolveRecord] {
+        profile.history.sorted { a, b in a.date > b.date }
     }
     
     var body: some View {
@@ -681,13 +684,13 @@ struct HistoryView: View {
                             .padding()
                     } else {
                         LazyVGrid(columns: [
-                            GridColumn(.flexible()),
-                            GridColumn(.flexible())
+                            GridItem(.flexible()),
+                            GridItem(.flexible())
                         ], spacing: 12) {
-                            StatCard(title: "Best", value: formatTime(statistics.bestTime), color: .green)
-                            StatCard(title: "Average", value: formatTime(statistics.averageTime), color: .blue)
-                            StatCard(title: "Median", value: formatTime(statistics.medianTime), color: .purple)
-                            StatCard(title: "Std Dev", value: formatTime(statistics.standardDeviation), color: .orange)
+                            StatCard(title: "Best", value: formatTime(bestTimeComputed), color: .green)
+                            StatCard(title: "Average", value: formatTime(averageTimeComputed), color: .blue)
+                            StatCard(title: "Median", value: formatTime(medianTimeComputed), color: .purple)
+                            StatCard(title: "Std Dev", value: formatTime(stdDevSampleComputed), color: .orange)
                             StatCard(title: "Ao5", value: formatTimeOptional(rollingAoN(profile.history, N: 5)), color: .teal)
                             StatCard(title: "Ao12", value: formatTimeOptional(rollingAoN(profile.history, N: 12)), color: .indigo)
                         }
@@ -698,7 +701,7 @@ struct HistoryView: View {
                 
                 // History List
                 List {
-                    ForEach(profile.history.sorted(by: { $0.date > $1.date })) { record in
+                    ForEach(historySortedDesc) { record in
                         HStack {
                             VStack(alignment: .leading) {
                                 Text(formatTime(record.time))
@@ -838,7 +841,7 @@ struct SimpleLineChart: View {
             
             ZStack {
                 // Grid lines
-                ForEach(0..<5) { i in
+                ForEach(0..<5, id: \.self) { i in
                     let y = height * CGFloat(i) / 4
                     Path { path in
                         path.move(to: CGPoint(x: 20, y: y + 20))
@@ -850,11 +853,14 @@ struct SimpleLineChart: View {
                 // Line chart
                 if data.count > 1 {
                     Path { path in
-                        for (index, value) in data.enumerated() {
-                            let x = width * CGFloat(index) / CGFloat(data.count - 1) + 20
-                            let normalizedValue = range > 0 ? (maxValue - value) / range : 0.5
-                            let y = height * normalizedValue + 20
-                            
+                        let count = data.count
+                        guard count > 0 else { return }
+                        for index in 0..<count {
+                            let value = data[index]
+                            let x = width * CGFloat(index) / CGFloat(max(count - 1, 1)) + 20
+                            let normalized = range > 0 ? (maxValue - value) / range : 0.5
+                            let y = height * normalized + 20
+
                             if index == 0 {
                                 path.move(to: CGPoint(x: x, y: y))
                             } else {
@@ -863,13 +869,14 @@ struct SimpleLineChart: View {
                         }
                     }
                     .stroke(Color.blue, lineWidth: 2)
-                    
-                    // Data points
-                    ForEach(Array(data.enumerated()), id: \.offset) { index, value in
-                        let x = width * CGFloat(index) / CGFloat(data.count - 1) + 20
-                        let normalizedValue = range > 0 ? (maxValue - value) / range : 0.5
-                        let y = height * normalizedValue + 20
-                        
+
+                    // Data points (index-based to help the compiler)
+                    ForEach(0..<data.count, id: \.self) { index in
+                        let value = data[index]
+                        let x = width * CGFloat(index) / CGFloat(max(data.count - 1, 1)) + 20
+                        let normalized = range > 0 ? (maxValue - value) / range : 0.5
+                        let y = height * normalized + 20
+
                         Circle()
                             .fill(Color.blue)
                             .frame(width: 6, height: 6)
@@ -939,7 +946,8 @@ struct LeaderboardView: View {
                                 .font(.title3)
                                 .fontWeight(.semibold)
                             if profile.solveCount > 0 {
-                                Text("Avg: \(formatTime(profile.totalTime / Double(profile.solveCount)))")
+                                let avg = profile.totalTime / Double(profile.solveCount)
+                                Text("Avg: \(formatTime(avg))")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
