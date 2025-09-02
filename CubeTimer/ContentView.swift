@@ -16,7 +16,7 @@ func formatTime(_ time: TimeInterval) -> String {
     }
 }
 
-struct UserProfile: Codable, Identifiable {
+struct UserProfile: Codable, Identifiable, Equatable {
     var id = UUID()
     var name: String
     var bestTime: TimeInterval = 0
@@ -27,7 +27,7 @@ struct UserProfile: Codable, Identifiable {
     var history: [SolveRecord] = []
 }
 
-struct SolveRecord: Codable, Identifiable {
+struct SolveRecord: Codable, Identifiable, Equatable {
     var id = UUID()
     let time: TimeInterval
     let date: Date
@@ -42,7 +42,7 @@ enum Penalty: Codable, Equatable {
     case none, plus2, dnf
 }
 
-struct CodableColor: Codable {
+struct CodableColor: Codable, Equatable {
     let red: Double
     let green: Double
     let blue: Double
