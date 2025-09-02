@@ -44,15 +44,6 @@ struct CodableColor: Codable {
     }
 }
 
-@main
-struct CubeTimerApp: App {
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
-    }
-}
-
 struct ContentView: View {
     @State private var currentTime: TimeInterval = 0
     @State private var isRunning = false
