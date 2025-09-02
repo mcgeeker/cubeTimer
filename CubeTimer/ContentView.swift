@@ -23,6 +23,10 @@ struct SolveRecord: Codable, Identifiable {
     }
 }
 
+enum Penalty: Codable, Equatable {
+    case none, plus2, dnf
+}
+
 struct CodableColor: Codable {
     let red: Double
     let green: Double
@@ -49,6 +53,8 @@ struct ContentView: View {
     @State private var isRunning = false
     @State private var isInspecting = false
     @State private var inspectionTime: TimeInterval = 15
+    @State private var inspectionStartMonotonic: TimeInterval?
+    @State private var pendingPenalty: Penalty = .none
     @State private var timer: Timer?
     @State private var startTime: Date?
     
@@ -69,6 +75,31 @@ struct ContentView: View {
     var averageTime: TimeInterval {
         guard currentProfile.solveCount > 0 else { return 0 }
         return currentProfile.totalTime / Double(currentProfile.solveCount)
+    }
+    
+    // MARK: - Rolling averages
+    var ao5: TimeInterval? { rollingAoN(currentProfile.history, N: 5) }
+    var ao12: TimeInterval? { rollingAoN(currentProfile.history, N: 12) }
+
+    /// WCA-style rolling average over last N solves using *displayed* times (your stored SolveRecord.time).
+    /// Drops single best and single worst; if any non-finite remains in the middle, AoN is DNF (nil).
+    private func rollingAoN(_ records: [SolveRecord], N: Int) -> TimeInterval? {
+        guard records.count >= N else { return nil }
+        let lastN = records.suffix(N).map { $0.time } // displayedTime == stored time
+        // Sort finite before non-finite so Infinity (DNF) sits at the end
+        let sorted = lastN.sorted { (a, b) in
+            if a.isFinite != b.isFinite { return a.isFinite }
+            return a < b
+        }
+        let middle = sorted.dropFirst().dropLast()
+        if middle.contains(where: { !$0.isFinite }) { return nil }
+        let sum = middle.reduce(0, +)
+        return sum / Double(middle.count)
+    }
+
+    private func formatTimeOptional(_ t: TimeInterval?) -> String {
+        guard let t = t else { return "—" }
+        return formatTime(t)
     }
     
     var bothButtonsPressed: Bool {
@@ -191,6 +222,8 @@ struct ContentView: View {
                                 StatCard(title: "Last", value: formatTime(currentProfile.lastTime), color: .blue)
                                 StatCard(title: "Average", value: formatTime(averageTime), color: .purple)
                                 StatCard(title: "Solves", value: "\(currentProfile.solveCount)", color: .orange)
+                                StatCard(title: "Ao5", value: formatTimeOptional(ao5), color: .teal)
+                                StatCard(title: "Ao12", value: formatTimeOptional(ao12), color: .indigo)
                             }
                         }
                         
@@ -247,17 +280,18 @@ struct ContentView: View {
     }
     
     private func getStatusText() -> String {
-        if isRunning {
-            return "Solving..."
-        } else if isInspecting {
+        if isRunning { return "Solving..." }
+        if isInspecting {
+            // Show penalty hints during inspection window
+            let overrun = max(0, 15 - inspectionTime)
+            if pendingPenalty == .dnf { return "Inspection — DNF (≥17s)" }
+            if overrun > 0 { return "Inspection — +2 if started now" }
             return "Inspection"
-        } else if readyToStart {
-            return "Release to start!"
-        } else if bothButtonsPressed {
-            return "Hold both buttons"
-        } else {
-            return "Place hands on both sides"
         }
+        if pendingPenalty == .dnf { return "DNF — over inspection (≥17s)" }
+        if readyToStart { return "Release to start!" }
+        if bothButtonsPressed { return "Hold both buttons" }
+        return "Place hands on both sides"
     }
     
     private func getTimerColor() -> Color {
@@ -279,6 +313,7 @@ struct ContentView: View {
             } else if !isInspecting && !readyToStart {
                 startInspection()
             }
+            // If inspecting, startInspection's timer loop will handle transitioning to ready when both are pressed.
         }
     }
     
@@ -291,24 +326,54 @@ struct ContentView: View {
     
     private func startInspection() {
         isInspecting = true
-        inspectionTime = 15
         readyToStart = false
-        
+        pendingPenalty = .none
+
+        inspectionStartMonotonic = CACurrentMediaTime()
+        // We display a countdown toward 15.00; compute from monotonic "now" to avoid drift.
+        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { _ in
-            inspectionTime -= 0.01
-            if inspectionTime <= 0 {
-                readyToStart = true
+            guard let start = inspectionStartMonotonic else { return }
+            let elapsed = CACurrentMediaTime() - start
+            // Show remaining time down toward 0 at 15s, then clamp at 0
+            let remaining = 15.0 - elapsed
+            inspectionTime = max(0, remaining)
+
+            // Determine current penalty state based on elapsed
+            if elapsed >= 17.0 {
+                pendingPenalty = .dnf
                 isInspecting = false
+                readyToStart = false
                 timer?.invalidate()
-            } else if inspectionTime <= 8 && bothButtonsPressed {
-                readyToStart = true
+                return
+            } else if elapsed >= 15.0 {
+                pendingPenalty = .plus2
+            } else {
+                pendingPenalty = .none
+            }
+
+            // Transition to "ready" only when BOTH pads are currently pressed (no arbitrary 8s rule)
+            if bothButtonsPressed {
                 isInspecting = false
+                // If already DNF we won't allow start; otherwise allow ready-to-release start.
+                if pendingPenalty != .dnf {
+                    readyToStart = true
+                }
                 timer?.invalidate()
             }
         }
+        // Small tolerance helps power without affecting display cadence
+        timer?.tolerance = 0.003
     }
     
     private func startSolve() {
+        // Do not start if inspection exceeded 17s (DNF)
+        if pendingPenalty == .dnf {
+            // Reset readiness; user must re-start a new inspection
+            readyToStart = false
+            isInspecting = false
+            return
+        }
         timer?.invalidate()
         isInspecting = false
         readyToStart = false
@@ -326,20 +391,25 @@ struct ContentView: View {
     private func stopSolve() {
         timer?.invalidate()
         isRunning = false
-        
-        let isNewBest = currentProfile.bestTime == 0 || currentTime < currentProfile.bestTime
-        
-        currentProfile.lastTime = currentTime
-        currentProfile.totalTime += currentTime
+
+        // Apply WCA +2 if pending
+        let finalTime = currentTime + (pendingPenalty == .plus2 ? 2.0 : 0.0)
+        let isNewBest = currentProfile.bestTime == 0 || finalTime < currentProfile.bestTime
+
+        currentProfile.lastTime = finalTime
+        currentProfile.totalTime += finalTime
         currentProfile.solveCount += 1
-        currentProfile.history.append(SolveRecord(time: currentTime))
-        
+        currentProfile.history.append(SolveRecord(time: finalTime))
+
         if isNewBest {
-            currentProfile.bestTime = currentTime
+            currentProfile.bestTime = finalTime
             showingNewBest = true
             confettiTrigger += 1
         }
-        
+
+        // Reset penalty state for the next attempt
+        pendingPenalty = .none
+
         saveProfiles()
     }
     
@@ -465,6 +535,7 @@ struct SettingsView: View {
                             if let index = userProfiles.firstIndex(where: { $0.id == currentProfile.id }) {
                                 userProfiles[index].themeColor = codableColor
                                 currentProfile = userProfiles[index]
+                                onSave() // persist immediately
                             }
                         }
                 }
@@ -584,8 +655,10 @@ struct HistoryView: View {
         if times.count < 2 {
             standardDeviation = 0
         } else {
-            let variance = times.map { pow($0 - averageTime, 2) }.reduce(0, +) / Double(times.count)
-            standardDeviation = sqrt(variance)
+            // Sample standard deviation (n − 1)
+            let mean = averageTime
+            let sse = times.reduce(0) { $0 + pow($1 - mean, 2) }
+            standardDeviation = sqrt(sse / Double(times.count - 1))
         }
         
         return (bestTime, averageTime, medianTime, standardDeviation)
@@ -613,6 +686,8 @@ struct HistoryView: View {
                             StatCard(title: "Average", value: formatTime(statistics.averageTime), color: .blue)
                             StatCard(title: "Median", value: formatTime(statistics.medianTime), color: .purple)
                             StatCard(title: "Std Dev", value: formatTime(statistics.standardDeviation), color: .orange)
+                            StatCard(title: "Ao5", value: formatTimeOptional(rollingAoN(profile.history, N: 5)), color: .teal)
+                            StatCard(title: "Ao12", value: formatTimeOptional(rollingAoN(profile.history, N: 12)), color: .indigo)
                         }
                     }
                 }
@@ -675,12 +750,30 @@ struct HistoryView: View {
             return String(format: "%.2f", seconds)
         }
     }
-    
+        
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+    
+    private func formatTimeOptional(_ t: TimeInterval?) -> String {
+        guard let t = t else { return "—" }
+        return formatTime(t)
+    }
+
+    private func rollingAoN(_ records: [SolveRecord], N: Int) -> TimeInterval? {
+        guard records.count >= N else { return nil }
+        let lastN = records.suffix(N).map { $0.time }
+        let sorted = lastN.sorted { (a, b) in
+            if a.isFinite != b.isFinite { return a.isFinite }
+            return a < b
+        }
+        let middle = sorted.dropFirst().dropLast()
+        if middle.contains(where: { !$0.isFinite }) { return nil }
+        let sum = middle.reduce(0, +)
+        return sum / Double(middle.count)
     }
 }
 
