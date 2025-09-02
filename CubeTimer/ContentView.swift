@@ -270,9 +270,9 @@ struct ContentView: View {
                                 }
                         )
                 }
-                .ignoresSafeArea()
             }
         }
+        .ignoresSafeArea()
         .sensoryFeedback(.impact(weight: .medium, intensity: 0.8), trigger: isRunning)
         .confettiCannon(counter: $confettiTrigger)
         .sheet(isPresented: $showingSettings) {
