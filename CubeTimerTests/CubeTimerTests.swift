@@ -5,13 +5,12 @@
 //  Created by Admin on 2025-09-01.
 //
 
-import Testing
+import XCTest
 @testable import CubeTimer
 
-struct CubeTimerTests {
+final class CubeTimerTests: XCTestCase {
 
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
+    func testExample() throws {
+        // Write your test here. Use XCTAssert and related functions to verify your tests produce the correct results.
     }
-
 }
