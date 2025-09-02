@@ -498,108 +498,139 @@ struct SettingsView: View {
     @State private var selectedColor: Color = .purple
     @State private var selectedProfileId: UUID = .init()
 
-    
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Current User") {
-                    Picker("Profile", selection: $selectedProfileId) {
-                        ForEach(userProfiles) { profile in
-                            Text(profile.name).tag(profile.id)
-                        }
-                    }
-                    .onChange(of: selectedProfileId) { _, newId in
-                        if let p = userProfiles.first(where: { $0.id == newId }) {
-                            currentProfile = p
-                            selectedColor = p.themeColor.color
-                            onSave()
-                        }
-                    }
-                }
-                
-                Section("User Management") {
-                    Button("Add New User") {
-                        showingNewUserAlert = true
-                    }
-                    
-                    if userProfiles.count > 1 {
-                        Button("Delete Current User") {
-                            showingDeleteAlert = true
-                        }
-                        .foregroundColor(.red)
-                    }
-                }
-                
-                Section("Theme Color") {
-                    ColorPicker("Button Color", selection: $selectedColor)
-                        .onChange(of: selectedColor) { _, newColor in
-                            let codableColor = CodableColor(newColor)
-                            if let index = userProfiles.firstIndex(where: { $0.id == currentProfile.id }) {
-                                userProfiles[index].themeColor = codableColor
-                                currentProfile = userProfiles[index]
-                                onSave() // persist immediately
-                            }
-                        }
-                }
-                
-                Section("Statistics") {
-                    Button("Reset Current User's Statistics") {
-                        currentProfile.bestTime = 0
-                        currentProfile.lastTime = 0
-                        currentProfile.solveCount = 0
-                        currentProfile.totalTime = 0
-                        currentProfile.history = []
-                        onSave()
-                        dismiss()
-                    }
-                    .foregroundColor(.red)
+            settingsForm
+        }
+    }
+
+    private var settingsForm: some View {
+        Form {
+            currentUserSection
+            userManagementSection
+            themeColorSection
+            statisticsSection
+        }
+        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { toolbarContent }
+        .onAppear { setInitialSelections() }
+        .onChange(of: currentProfile) { _, newProfile in
+            updateSelections(with: newProfile)
+        }
+        .alert("New User", isPresented: $showingNewUserAlert, actions: newUserAlert) {
+            Text("Enter a name for the new user profile")
+        }
+        .alert("Delete User", isPresented: $showingDeleteAlert, actions: deleteUserAlert) {
+            Text("Are you sure you want to delete \(currentProfile.name)'s profile? This cannot be undone.")
+        }
+    }
+
+    private var currentUserSection: some View {
+        Section("Current User") {
+            Picker("Profile", selection: $selectedProfileId) {
+                ForEach(userProfiles) { profile in
+                    Text(profile.name).tag(profile.id)
                 }
             }
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        onSave()
-                        dismiss()
-                    }
+            .onChange(of: selectedProfileId) { _, newId in
+                if let p = userProfiles.first(where: { $0.id == newId }) {
+                    currentProfile = p
+                    selectedColor = p.themeColor.color
+                    onSave()
                 }
             }
-            .onAppear {
-                selectedColor = currentProfile.themeColor.color
-                selectedProfileId = currentProfile.id
+        }
+    }
+
+    private var userManagementSection: some View {
+        Section("User Management") {
+            Button("Add New User") {
+                showingNewUserAlert = true
             }
-            .onChange(of: currentProfile) { _, newProfile in
-                selectedColor = newProfile.themeColor.color
-                selectedProfileId = newProfile.id
-            }
-            .alert("New User", isPresented: $showingNewUserAlert) {
-                TextField("Name", text: $newUserName)
-                Button("Cancel", role: .cancel) { }
-                Button("Add") {
-                    if !newUserName.isEmpty {
-                        let newProfile = UserProfile(name: newUserName)
-                        userProfiles.append(newProfile)
-                        currentProfile = newProfile
-                        selectedColor = newProfile.themeColor.color
-                        onSave()
-                        newUserName = ""
-                    }
+
+            if userProfiles.count > 1 {
+                Button("Delete Current User") {
+                    showingDeleteAlert = true
                 }
-            } message: {
-                Text("Enter a name for the new user profile")
+                .foregroundColor(.red)
             }
-            .alert("Delete User", isPresented: $showingDeleteAlert) {
-                Button("Cancel", role: .cancel) { }
-                Button("Delete", role: .destructive) {
+        }
+    }
+
+    private var themeColorSection: some View {
+        Section("Theme Color") {
+            ColorPicker("Button Color", selection: $selectedColor)
+                .onChange(of: selectedColor) { _, newColor in
+                    let codableColor = CodableColor(newColor)
                     if let index = userProfiles.firstIndex(where: { $0.id == currentProfile.id }) {
-                        userProfiles.remove(at: index)
-                        currentProfile = userProfiles.first!
+                        userProfiles[index].themeColor = codableColor
+                        currentProfile = userProfiles[index]
                         onSave()
                     }
                 }
-            } message: {
-                Text("Are you sure you want to delete \(currentProfile.name)'s profile? This cannot be undone.")
+        }
+    }
+
+    private var statisticsSection: some View {
+        Section("Statistics") {
+            Button("Reset Current User's Statistics") {
+                currentProfile.bestTime = 0
+                currentProfile.lastTime = 0
+                currentProfile.solveCount = 0
+                currentProfile.totalTime = 0
+                currentProfile.history = []
+                onSave()
+                dismiss()
+            }
+            .foregroundColor(.red)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Button("Done") {
+                onSave()
+                dismiss()
+            }
+        }
+    }
+
+    private func setInitialSelections() {
+        selectedColor = currentProfile.themeColor.color
+        selectedProfileId = currentProfile.id
+    }
+
+    private func updateSelections(with profile: UserProfile) {
+        selectedColor = profile.themeColor.color
+        selectedProfileId = profile.id
+    }
+
+    @ViewBuilder
+    private func newUserAlert() -> some View {
+        TextField("Name", text: $newUserName)
+        Button("Cancel", role: .cancel) { }
+        Button("Add") {
+            if !newUserName.isEmpty {
+                let newProfile = UserProfile(name: newUserName)
+                userProfiles.append(newProfile)
+                currentProfile = newProfile
+                selectedColor = newProfile.themeColor.color
+                onSave()
+                newUserName = ""
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func deleteUserAlert() -> some View {
+        Button("Cancel", role: .cancel) { }
+        Button("Delete", role: .destructive) {
+            if let index = userProfiles.firstIndex(where: { $0.id == currentProfile.id }) {
+                userProfiles.remove(at: index)
+                currentProfile = userProfiles.first!
+                onSave()
             }
         }
     }
