@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 func formatTime(_ time: TimeInterval) -> String {
     if time <= 0 {
@@ -49,13 +48,30 @@ struct CodableColor: Codable, Equatable {
     let alpha: Double
     
     init(_ color: Color) {
-        let uiColor = UIColor(color)
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
-        red = Double(r)
-        green = Double(g)
-        blue = Double(b)
-        alpha = Double(a)
+        if let cgColor = color.cgColor,
+           let components = cgColor.components {
+            if components.count >= 3 {
+                red = Double(components[0])
+                green = Double(components[1])
+                blue = Double(components[2])
+                alpha = components.count >= 4 ? Double(components[3]) : 1.0
+            } else if components.count == 2 {
+                red = Double(components[0])
+                green = Double(components[0])
+                blue = Double(components[0])
+                alpha = Double(components[1])
+            } else {
+                red = 0
+                green = 0
+                blue = 0
+                alpha = 1
+            }
+        } else {
+            red = 0
+            green = 0
+            blue = 0
+            alpha = 1
+        }
     }
     
     var color: Color {
@@ -288,9 +304,6 @@ struct ContentView: View {
         }
         .onAppear {
             loadProfiles()
-        }
-        .onChange(of: isRunning) { oldValue, newValue in
-            UIApplication.shared.isIdleTimerDisabled = newValue
         }
     }
     
@@ -728,7 +741,7 @@ struct HistoryView: View {
                     }
                 }
                 .padding()
-                .background(Color(UIColor.systemGray6))
+                .background(Color.gray.opacity(0.1))
                 
                 // History List
                 List {
