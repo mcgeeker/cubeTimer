@@ -1,6 +1,21 @@
 import SwiftUI
 import UIKit
 
+func formatTime(_ time: TimeInterval) -> String {
+    if time <= 0 {
+        return "0.00"
+    }
+
+    let minutes = Int(time) / 60
+    let seconds = time.truncatingRemainder(dividingBy: 60)
+
+    if minutes > 0 {
+        return String(format: "%d:%05.2f", minutes, seconds)
+    } else {
+        return String(format: "%.2f", seconds)
+    }
+}
+
 struct UserProfile: Codable, Identifiable {
     let id = UUID()
     var name: String
@@ -41,15 +56,6 @@ struct CodableColor: Codable {
     
     var color: Color {
         Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
-    }
-}
-
-@main
-struct CubeTimerApp: App {
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
     }
 }
 
@@ -235,7 +241,7 @@ struct ContentView: View {
             }
         }
         .sensoryFeedback(.impact(weight: .medium, intensity: 0.8), trigger: isRunning)
-        .confettiCannon(counter: $confettiTrigger, radius: 300)
+        .confettiCannon(counter: $confettiTrigger)
         .sheet(isPresented: $showingSettings) {
             SettingsView(userProfiles: $userProfiles, currentProfile: $currentProfile) {
                 saveProfiles()
@@ -383,19 +389,6 @@ struct ContentView: View {
         currentUserId = currentProfile.id.uuidString
     }
     
-    private func formatTime(_ time: TimeInterval) -> String {
-        if time <= 0 {
-            return "0.00"
-        }
-        
-        let minutes = Int(time) / 60
-        let seconds = time.truncatingRemainder(dividingBy: 60)
-        
-        if minutes > 0 {
-            return String(format: "%d:%05.2f", minutes, seconds)
-        } else {
-            return String(format: "%.2f", seconds)
-        }
     }
 }
 
@@ -670,21 +663,6 @@ struct HistoryView: View {
         }
     }
     
-    private func formatTime(_ time: TimeInterval) -> String {
-        if time <= 0 {
-            return "0.00"
-        }
-        
-        let minutes = Int(time) / 60
-        let seconds = time.truncatingRemainder(dividingBy: 60)
-        
-        if minutes > 0 {
-            return String(format: "%d:%05.2f", minutes, seconds)
-        } else {
-            return String(format: "%.2f", seconds)
-        }
-    }
-    
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
@@ -810,20 +788,6 @@ struct SimpleLineChart: View {
         }
     }
     
-    private func formatTime(_ time: TimeInterval) -> String {
-        if time <= 0 {
-            return "0.00"
-        }
-        
-        let minutes = Int(time) / 60
-        let seconds = time.truncatingRemainder(dividingBy: 60)
-        
-        if minutes > 0 {
-            return String(format: "%d:%02d", minutes, Int(seconds))
-        } else {
-            return String(format: "%.1f", seconds)
-        }
-    }
 }
 
 struct LeaderboardView: View {
@@ -907,25 +871,10 @@ struct LeaderboardView: View {
         default: return .primary
         }
     }
-    
-    private func formatTime(_ time: TimeInterval) -> String {
-        if time <= 0 {
-            return "0.00"
-        }
-        
-        let minutes = Int(time) / 60
-        let seconds = time.truncatingRemainder(dividingBy: 60)
-        
-        if minutes > 0 {
-            return String(format: "%d:%05.2f", minutes, seconds)
-        } else {
-            return String(format: "%.2f", seconds)
-        }
-    }
 }
 
 extension View {
-    func confettiCannon(counter: Binding<Int>, radius: CGFloat) -> some View {
+    func confettiCannon(counter: Binding<Int>) -> some View {
         self.overlay(
             ZStack {
                 if counter.wrappedValue > 0 {
