@@ -285,8 +285,8 @@ struct ContentView: View {
                             ], spacing: 12) {
                                 StatCard(title: "Best", value: formatTime(currentProfile.bestTime), color: .green)
                                 StatCard(title: "Last", value: formatTime(currentProfile.lastTime), color: .blue)
-                                StatCard(title: "Average", value: formatTime(averageTime), color: .purple)
                                 StatCard(title: "Solves", value: "\(currentProfile.solveCount)", color: .orange)
+                                StatCard(title: "Average", value: formatTime(averageTime), color: .purple)
                                 StatCard(title: "Ao5", value: formatTimeOptional(ao5), color: .teal)
                                 StatCard(title: "Ao12", value: formatTimeOptional(ao12), color: .indigo)
                             }
