@@ -19,6 +19,27 @@ func formatTime(_ time: TimeInterval) -> String {
     }
 }
 
+func formatTimeOptional(_ t: TimeInterval?) -> String {
+    guard let t = t else { return "—" }
+    return formatTime(t)
+}
+
+/// WCA-style rolling average over last N solves using displayed times.
+/// Drops single best and single worst; if any non-finite remains in the
+/// middle, AoN is considered DNF (nil).
+func rollingAoN(_ records: [SolveRecord], N: Int) -> TimeInterval? {
+    guard records.count >= N else { return nil }
+    let lastN = records.suffix(N).map { $0.time }
+    let sorted = lastN.sorted { (a, b) in
+        if a.isFinite != b.isFinite { return a.isFinite }
+        return a < b
+    }
+    let middle = sorted.dropFirst().dropLast()
+    if middle.contains(where: { !$0.isFinite }) { return nil }
+    let sum = middle.reduce(0, +)
+    return sum / Double(middle.count)
+}
+
 struct UserProfile: Codable, Identifiable, Equatable {
     var id = UUID()
     var name: String
@@ -119,27 +140,6 @@ struct ContentView: View {
     // MARK: - Rolling averages
     var ao5: TimeInterval? { rollingAoN(currentProfile.history, N: 5) }
     var ao12: TimeInterval? { rollingAoN(currentProfile.history, N: 12) }
-
-    /// WCA-style rolling average over last N solves using *displayed* times (your stored SolveRecord.time).
-    /// Drops single best and single worst; if any non-finite remains in the middle, AoN is DNF (nil).
-    private func rollingAoN(_ records: [SolveRecord], N: Int) -> TimeInterval? {
-        guard records.count >= N else { return nil }
-        let lastN = records.suffix(N).map { $0.time } // displayedTime == stored time
-        // Sort finite before non-finite so Infinity (DNF) sits at the end
-        let sorted = lastN.sorted { (a, b) in
-            if a.isFinite != b.isFinite { return a.isFinite }
-            return a < b
-        }
-        let middle = sorted.dropFirst().dropLast()
-        if middle.contains(where: { !$0.isFinite }) { return nil }
-        let sum = middle.reduce(0, +)
-        return sum / Double(middle.count)
-    }
-
-    private func formatTimeOptional(_ t: TimeInterval?) -> String {
-        guard let t = t else { return "—" }
-        return formatTime(t)
-    }
     
     var bothButtonsPressed: Bool {
         leftButtonPressed && rightButtonPressed
@@ -821,34 +821,12 @@ struct HistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showingChart = false
     
-    // Precomputed arrays to keep the compiler happy
-    private var times: [TimeInterval] { profile.history.map { $0.time } }
-    private var sortedTimes: [TimeInterval] { times.sorted() }
-
-    private var bestTimeComputed: TimeInterval { profile.bestTime }
-    private var averageTimeComputed: TimeInterval {
-        guard !times.isEmpty else { return 0 }
-        return times.reduce(0, +) / Double(times.count)
+    private var averageTime: TimeInterval {
+        guard profile.solveCount > 0 else { return 0 }
+        return profile.totalTime / Double(profile.solveCount)
     }
-    private var medianTimeComputed: TimeInterval {
-        guard !sortedTimes.isEmpty else { return 0 }
-        if sortedTimes.count % 2 == 0 {
-            let mid = sortedTimes.count / 2
-            return (sortedTimes[mid - 1] + sortedTimes[mid]) / 2
-        } else {
-            return sortedTimes[sortedTimes.count / 2]
-        }
-    }
-    private var stdDevSampleComputed: TimeInterval {
-        let n = times.count
-        guard n > 1 else { return 0 }
-        let mean = averageTimeComputed
-        let sse = times.reduce(0) { partial, t in
-            let d = t - mean
-            return partial + d * d
-        }
-        return sqrt(sse / Double(n - 1))
-    }
+    private var ao5: TimeInterval? { rollingAoN(profile.history, N: 5) }
+    private var ao12: TimeInterval? { rollingAoN(profile.history, N: 12) }
 
     private var historySortedDesc: [SolveRecord] {
         profile.history.sorted { a, b in a.date > b.date }
@@ -874,12 +852,12 @@ struct HistoryView: View {
                                     .padding(.vertical)
                             } else {
                                 LazyVGrid(columns: columns, spacing: 12) {
-                                    StatCard(title: "Best", value: formatTime(bestTimeComputed), color: .green)
-                                    StatCard(title: "Average", value: formatTime(averageTimeComputed), color: .blue)
-                                    StatCard(title: "Median", value: formatTime(medianTimeComputed), color: .purple)
-                                    StatCard(title: "Std Dev", value: formatTime(stdDevSampleComputed), color: .orange)
-                                    StatCard(title: "Ao5", value: formatTimeOptional(rollingAoN(profile.history, N: 5)), color: .teal)
-                                    StatCard(title: "Ao12", value: formatTimeOptional(rollingAoN(profile.history, N: 12)), color: .indigo)
+                                    StatCard(title: "Best", value: formatTime(profile.bestTime), color: .green)
+                                    StatCard(title: "Last", value: formatTime(profile.lastTime), color: .blue)
+                                    StatCard(title: "Average", value: formatTime(averageTime), color: .purple)
+                                    StatCard(title: "Solves", value: "\(profile.solveCount)", color: .orange)
+                                    StatCard(title: "Ao5", value: formatTimeOptional(ao5), color: .teal)
+                                    StatCard(title: "Ao12", value: formatTimeOptional(ao12), color: .indigo)
                                 }
                             }
                         }
@@ -956,44 +934,11 @@ struct HistoryView: View {
     
 
 
-    private func formatTime(_ time: TimeInterval) -> String {
-        if time <= 0 {
-            return "0.00"
-        }
-        
-        let minutes = Int(time) / 60
-        let seconds = time.truncatingRemainder(dividingBy: 60)
-        
-        if minutes > 0 {
-            return String(format: "%d:%05.2f", minutes, seconds)
-        } else {
-            return String(format: "%.2f", seconds)
-        }
-    }
-        
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         return formatter.string(from: date)
-    }
-    
-    private func formatTimeOptional(_ t: TimeInterval?) -> String {
-        guard let t = t else { return "—" }
-        return formatTime(t)
-    }
-
-    private func rollingAoN(_ records: [SolveRecord], N: Int) -> TimeInterval? {
-        guard records.count >= N else { return nil }
-        let lastN = records.suffix(N).map { $0.time }
-        let sorted = lastN.sorted { (a, b) in
-            if a.isFinite != b.isFinite { return a.isFinite }
-            return a < b
-        }
-        let middle = sorted.dropFirst().dropLast()
-        if middle.contains(where: { !$0.isFinite }) { return nil }
-        let sum = middle.reduce(0, +)
-        return sum / Double(middle.count)
     }
 }
 
