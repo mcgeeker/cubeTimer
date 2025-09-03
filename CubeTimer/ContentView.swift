@@ -347,9 +347,8 @@ struct ContentView: View {
         if isRunning { return "Solving..." }
         if isInspecting {
             // Show penalty hints during inspection window
-            let overrun = max(0, 15 - inspectionTime)
             if pendingPenalty == .dnf { return "Inspection — DNF (≥17s)" }
-            if overrun > 0 { return "Inspection — +2 if started now" }
+            if pendingPenalty == .plus2 { return "Inspection — +2 if started now" }
             return "Inspection"
         }
         if pendingPenalty == .dnf { return "DNF — over inspection (≥17s)" }
