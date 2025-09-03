@@ -335,6 +335,7 @@ struct ContentView: View {
             }
         }
         .ignoresSafeArea()
+        .idleTimerDisabled(isRunning)
         .sensoryFeedback(.impact(weight: .medium, intensity: 0.8), trigger: isRunning)
         .confettiCannon(counter: $confettiTrigger)
         .sheet(isPresented: $showingSettings) {
