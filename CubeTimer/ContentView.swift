@@ -99,10 +99,13 @@ struct ContentView: View {
     @State private var showingLeaderboard = false
     @State private var isGuestMode = false
     
+    @State private var showingFirstUserAlert = false
+    @State private var newUserName = ""
+
     @AppStorage("userProfiles") private var userProfilesData: Data = Data()
     @AppStorage("currentUserId") private var currentUserId: String = ""
     @State private var userProfiles: [UserProfile] = []
-    @State private var currentProfile: UserProfile = UserProfile(name: "Default")
+    @State private var currentProfile: UserProfile = UserProfile(name: "")
     
     var averageTime: TimeInterval {
         guard currentProfile.solveCount > 0 else { return 0 }
@@ -145,24 +148,54 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geometry in
             if geometry.size.width < geometry.size.height {
-                // Portrait - Show rotation instruction
-                VStack(spacing: 30) {
+                // Portrait - Show navigation and statistics, but not the timer
+                VStack(spacing: 25) {
+                    // Settings button
+                    HStack {
+                        Spacer()
+                        Button(action: { showingSettings = true }) {
+                            Image(systemName: "gearshape.fill")
+                                .font(.title2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
                     Spacer()
-                    
-                    Image(systemName: "rotate.right")
-                        .font(.system(size: 80))
-                        .foregroundColor(.secondary)
-                    
-                    Text("Rotate to landscape")
-                        .font(.title)
+
+                    // Statistics and links
+                    VStack(spacing: 15) {
+                        Button("Statistics - \(currentProfile.name)") {
+                            showingHistory = true
+                        }
+                        .font(.title3)
                         .fontWeight(.semibold)
-                    
-                    Text("Turn your phone sideways to use the timer")
+                        .foregroundColor(.primary)
+
+                        Button("Leaderboard") {
+                            showingLeaderboard = true
+                        }
+                        .font(.body)
+                        .foregroundColor(.secondary)
+
+                        LazyVGrid(columns: [
+                            GridItem(.flexible()),
+                            GridItem(.flexible())
+                        ], spacing: 12) {
+                            StatCard(title: "Best", value: formatTime(currentProfile.bestTime), color: .green)
+                            StatCard(title: "Last", value: formatTime(currentProfile.lastTime), color: .blue)
+                            StatCard(title: "Average", value: formatTime(averageTime), color: .purple)
+                            StatCard(title: "Solves", value: "\(currentProfile.solveCount)", color: .orange)
+                            StatCard(title: "Ao5", value: formatTimeOptional(ao5), color: .teal)
+                            StatCard(title: "Ao12", value: formatTimeOptional(ao12), color: .indigo)
+                        }
+                    }
+
+                    Spacer()
+
+                    Text("Rotate to landscape to use the timer")
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
-                    
-                    Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding()
@@ -211,12 +244,18 @@ struct ContentView: View {
                                 .font(.title3)
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
-                            
+
                             Text(formatTime(isInspecting ? inspectionTime : currentTime))
                                 .font(.system(size: 56, weight: .light, design: .monospaced))
                                 .foregroundColor(getTimerColor())
                         }
-                        
+
+                        if isRunning {
+                            CancelButton(themeColor: selectedButtonColor) {
+                                cancelSolve()
+                            }
+                        }
+
                         if showingNewBest {
                             Text("🎉 NEW BEST TIME! 🎉")
                                 .font(.title2)
@@ -298,10 +337,15 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showingHistory) {
-            HistoryView(profile: currentProfile)
+            HistoryView(profile: $currentProfile) {
+                saveProfiles()
+            }
         }
         .sheet(isPresented: $showingLeaderboard) {
             LeaderboardView(userProfiles: userProfiles)
+        }
+        .alert("New User", isPresented: $showingFirstUserAlert, actions: firstUserAlert) {
+            Text("Enter a name for your profile")
         }
         .onAppear {
             loadProfiles()
@@ -312,9 +356,8 @@ struct ContentView: View {
         if isRunning { return "Solving..." }
         if isInspecting {
             // Show penalty hints during inspection window
-            let overrun = max(0, 15 - inspectionTime)
             if pendingPenalty == .dnf { return "Inspection — DNF (≥17s)" }
-            if overrun > 0 { return "Inspection — +2 if started now" }
+            if pendingPenalty == .plus2 { return "Inspection — +2 if started now" }
             return "Inspection"
         }
         if pendingPenalty == .dnf { return "DNF — over inspection (≥17s)" }
@@ -447,23 +490,30 @@ struct ContentView: View {
 
         saveProfiles()
     }
-    
+
+    private func cancelSolve() {
+        timer?.invalidate()
+        isRunning = false
+        currentTime = 0
+        startTime = nil
+        pendingPenalty = .none
+        isInspecting = false
+        readyToStart = false
+        leftButtonPressed = false
+        rightButtonPressed = false
+    }
+
     private func loadProfiles() {
         if let decoded = try? JSONDecoder().decode([UserProfile].self, from: userProfilesData) {
             userProfiles = decoded
         }
         
         if userProfiles.isEmpty {
-            let defaultProfile = UserProfile(name: "Default")
-            userProfiles = [defaultProfile]
-            currentProfile = defaultProfile
-            currentUserId = defaultProfile.id.uuidString
-            saveProfiles()
+            showingFirstUserAlert = true
         } else if !currentUserId.isEmpty, let profile = userProfiles.first(where: { $0.id.uuidString == currentUserId }) {
             currentProfile = profile
         } else {
             currentProfile = userProfiles.first!
-            currentUserId = currentProfile.id.uuidString
             saveProfiles()
         }
     }
@@ -478,9 +528,81 @@ struct ContentView: View {
         }
         currentUserId = currentProfile.id.uuidString
     }
-    
+
+    @ViewBuilder
+    private func firstUserAlert() -> some View {
+        TextField("Name", text: $newUserName)
+        Button("Create") {
+            if !newUserName.trimmingCharacters(in: .whitespaces).isEmpty {
+                let newProfile = UserProfile(name: newUserName)
+                userProfiles = [newProfile]
+                currentProfile = newProfile
+                saveProfiles()
+                newUserName = ""
+            } else {
+                showingFirstUserAlert = true
+            }
+        }
     }
 
+    }
+
+struct CancelButton: View {
+    let themeColor: Color
+    let onCancel: () -> Void
+
+    @State private var progress: CGFloat = 0
+    @State private var timer: Timer?
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.red)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(themeColor)
+                    .frame(width: proxy.size.width * progress)
+            }
+            .overlay(
+                Text("Cancel")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            )
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if timer == nil {
+                            startTimer()
+                        }
+                    }
+                    .onEnded { _ in
+                        reset()
+                    }
+            )
+        }
+        .frame(height: 44)
+    }
+
+    private func startTimer() {
+        progress = 0
+        timer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { t in
+            progress += 0.01 / 2.0
+            if progress >= 1 {
+                t.invalidate()
+                timer = nil
+                onCancel()
+                progress = 0
+            }
+        }
+    }
+
+    private func reset() {
+        timer?.invalidate()
+        timer = nil
+        progress = 0
+    }
+}
 
 struct StatCard: View {
     let title: String
@@ -688,7 +810,8 @@ struct ConfettiView: View {
 }
 
 struct HistoryView: View {
-    let profile: UserProfile
+    @Binding var profile: UserProfile
+    var onUpdate: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var showingChart = false
     
@@ -727,74 +850,107 @@ struct HistoryView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Statistics Header
-                VStack(spacing: 16) {
-                    Text("Statistics Summary")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    
-                    if profile.history.isEmpty {
-                        Text("No solves recorded yet")
-                            .foregroundColor(.secondary)
-                            .padding()
-                    } else {
-                        LazyVGrid(columns: [
-                            GridItem(.flexible()),
-                            GridItem(.flexible())
-                        ], spacing: 12) {
-                            StatCard(title: "Best", value: formatTime(bestTimeComputed), color: .green)
-                            StatCard(title: "Average", value: formatTime(averageTimeComputed), color: .blue)
-                            StatCard(title: "Median", value: formatTime(medianTimeComputed), color: .purple)
-                            StatCard(title: "Std Dev", value: formatTime(stdDevSampleComputed), color: .orange)
-                            StatCard(title: "Ao5", value: formatTimeOptional(rollingAoN(profile.history, N: 5)), color: .teal)
-                            StatCard(title: "Ao12", value: formatTimeOptional(rollingAoN(profile.history, N: 12)), color: .indigo)
-                        }
-                    }
-                }
-                .padding()
-                .background(Color.gray.opacity(0.1))
-                
-                // History List
-                List {
-                    ForEach(historySortedDesc) { record in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(formatTime(record.time))
-                                    .font(.title3)
-                                    .fontWeight(.semibold)
-                                Text(formatDate(record.date))
-                                    .font(.caption)
+            GeometryReader { geometry in
+                let isLandscape = geometry.size.width > geometry.size.height
+                let columns = Array(repeating: GridItem(.flexible()), count: isLandscape ? 3 : 2)
+
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Statistics Header
+                        VStack(spacing: 16) {
+                            Text("Statistics Summary")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+
+                            if profile.history.isEmpty {
+                                Text("No solves recorded yet")
                                     .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            if record.time == profile.bestTime {
-                                Image(systemName: "crown.fill")
-                                    .foregroundColor(.yellow)
+                                    .padding()
+                            } else {
+                                LazyVGrid(columns: columns, spacing: 12) {
+                                    StatCard(title: "Best", value: formatTime(bestTimeComputed), color: .green)
+                                    StatCard(title: "Average", value: formatTime(averageTimeComputed), color: .blue)
+                                    StatCard(title: "Median", value: formatTime(medianTimeComputed), color: .purple)
+                                    StatCard(title: "Std Dev", value: formatTime(stdDevSampleComputed), color: .orange)
+                                    StatCard(title: "Ao5", value: formatTimeOptional(rollingAoN(profile.history, N: 5)), color: .teal)
+                                    StatCard(title: "Ao12", value: formatTimeOptional(rollingAoN(profile.history, N: 12)), color: .indigo)
+                                }
                             }
                         }
-                        .padding(.vertical, 4)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.gray.opacity(0.1))
+
+                        // History List
+                        if historySortedDesc.isEmpty {
+                            Text("No solve history available")
+                                .foregroundColor(.secondary)
+                                .padding()
+                        } else {
+                            LazyVStack(spacing: 0) {
+                                ForEach(historySortedDesc) { record in
+                                    HStack {
+                                        VStack(alignment: .leading) {
+                                            Text(formatTime(record.time))
+                                                .font(.title3)
+                                                .fontWeight(.semibold)
+                                            Text(formatDate(record.date))
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        Spacer()
+                                        if record.time == profile.bestTime {
+                                            Image(systemName: "crown.fill")
+                                                .foregroundColor(.yellow)
+                                        }
+                                    }
+                                    .padding(.vertical, 4)
+                                    .padding(.horizontal)
+                                    Divider()
+                                }
+                            }
+                        }
                     }
+                }
+                .navigationTitle("\(profile.name)'s History")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Chart") {
+                            showingChart = true
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Done") {
+                            dismiss()
+                        }
+                    }
+                    .onDelete(perform: deleteRecords)
                 }
             }
-            .navigationTitle("\(profile.name)'s History")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Chart") {
-                        showingChart = true
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
+            .sheet(isPresented: $showingChart) {
+                ChartView(history: profile.history)
             }
         }
-        .sheet(isPresented: $showingChart) {
-            ChartView(history: profile.history)
+    }
+
+    private func deleteRecords(at offsets: IndexSet) {
+        let sorted = historySortedDesc
+        for offset in offsets {
+            let record = sorted[offset]
+            if let index = profile.history.firstIndex(where: { $0.id == record.id }) {
+                profile.history.remove(at: index)
+            }
         }
+        recalcStats()
+        onUpdate()
+    }
+
+    private func recalcStats() {
+        profile.solveCount = profile.history.count
+        profile.totalTime = profile.history.reduce(0) { $0 + $1.time }
+        profile.bestTime = profile.history.map { $0.time }.min() ?? 0
+        profile.lastTime = profile.history.last?.time ?? 0
     }
     
 
