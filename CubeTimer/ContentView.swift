@@ -686,7 +686,21 @@ struct SettingsView: View {
             }
         }
     }
-
+    
+    private var themeColorSection: some View {
+        Section("Theme Color") {
+            ColorPicker("Choose Colour", selection: $selectedColor)
+                .onChange(of: selectedColor) { _, newColor in
+                    let codableColor = CodableColor(newColor)
+                    if let index = userProfiles.firstIndex(where: { $0.id == currentProfile.id }) {
+                        userProfiles[index].themeColor = codableColor
+                        currentProfile = userProfiles[index]
+                        onSave()
+                    }
+                }
+        }
+    }
+    
     private var userManagementSection: some View {
         Section("User Management") {
             Button(isGuestMode ? "Disable Guest Mode" : "Enable Guest Mode") {
@@ -703,20 +717,6 @@ struct SettingsView: View {
                 }
                 .foregroundColor(.red)
             }
-        }
-    }
-
-    private var themeColorSection: some View {
-        Section("Theme Color") {
-            ColorPicker("Button Color", selection: $selectedColor)
-                .onChange(of: selectedColor) { _, newColor in
-                    let codableColor = CodableColor(newColor)
-                    if let index = userProfiles.firstIndex(where: { $0.id == currentProfile.id }) {
-                        userProfiles[index].themeColor = codableColor
-                        currentProfile = userProfiles[index]
-                        onSave()
-                    }
-                }
         }
     }
 
