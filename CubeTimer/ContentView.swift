@@ -159,6 +159,7 @@ struct ContentView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+                    .padding(.top, 16)
 
                     Spacer()
 
@@ -235,6 +236,7 @@ struct ContentView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        .padding(.top, 16)
                         
                         Spacer()
                         
