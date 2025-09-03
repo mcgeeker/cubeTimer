@@ -1,5 +1,9 @@
 import SwiftUI
 
+#Preview {
+  ContentView()
+}
+
 func formatTime(_ time: TimeInterval) -> String {
     if time <= 0 {
         return "0.00"
@@ -652,8 +656,8 @@ struct SettingsView: View {
     private var settingsForm: some View {
         Form {
             currentUserSection
-            userManagementSection
             themeColorSection
+            userManagementSection
             statisticsSection
         }
         .navigationTitle("Settings")
@@ -689,7 +693,7 @@ struct SettingsView: View {
     }
     
     private var themeColorSection: some View {
-        Section("Theme Color") {
+        Section("Theme") {
             ColorPicker("Choose Colour", selection: $selectedColor)
                 .onChange(of: selectedColor) { _, newColor in
                     let codableColor = CodableColor(newColor)
