@@ -280,6 +280,7 @@ struct ContentView: View {
                             
                             LazyVGrid(columns: [
                                 GridItem(.flexible()),
+                                GridItem(.flexible()),
                                 GridItem(.flexible())
                             ], spacing: 12) {
                                 StatCard(title: "Best", value: formatTime(currentProfile.bestTime), color: .green)
