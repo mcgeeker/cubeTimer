@@ -144,24 +144,54 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geometry in
             if geometry.size.width < geometry.size.height {
-                // Portrait - Show rotation instruction
-                VStack(spacing: 30) {
+                // Portrait - Show navigation and statistics, but not the timer
+                VStack(spacing: 25) {
+                    // Settings button
+                    HStack {
+                        Spacer()
+                        Button(action: { showingSettings = true }) {
+                            Image(systemName: "gearshape.fill")
+                                .font(.title2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
                     Spacer()
-                    
-                    Image(systemName: "rotate.right")
-                        .font(.system(size: 80))
-                        .foregroundColor(.secondary)
-                    
-                    Text("Rotate to landscape")
-                        .font(.title)
+
+                    // Statistics and links
+                    VStack(spacing: 15) {
+                        Button("Statistics - \(currentProfile.name)") {
+                            showingHistory = true
+                        }
+                        .font(.title3)
                         .fontWeight(.semibold)
-                    
-                    Text("Turn your phone sideways to use the timer")
+                        .foregroundColor(.primary)
+
+                        Button("Leaderboard") {
+                            showingLeaderboard = true
+                        }
+                        .font(.body)
+                        .foregroundColor(.secondary)
+
+                        LazyVGrid(columns: [
+                            GridItem(.flexible()),
+                            GridItem(.flexible())
+                        ], spacing: 12) {
+                            StatCard(title: "Best", value: formatTime(currentProfile.bestTime), color: .green)
+                            StatCard(title: "Last", value: formatTime(currentProfile.lastTime), color: .blue)
+                            StatCard(title: "Average", value: formatTime(averageTime), color: .purple)
+                            StatCard(title: "Solves", value: "\(currentProfile.solveCount)", color: .orange)
+                            StatCard(title: "Ao5", value: formatTimeOptional(ao5), color: .teal)
+                            StatCard(title: "Ao12", value: formatTimeOptional(ao12), color: .indigo)
+                        }
+                    }
+
+                    Spacer()
+
+                    Text("Rotate to landscape to use the timer")
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
-                    
-                    Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding()
