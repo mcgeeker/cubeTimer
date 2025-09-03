@@ -333,7 +333,9 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showingHistory) {
-            HistoryView(profile: currentProfile)
+            HistoryView(profile: $currentProfile) {
+                saveProfiles()
+            }
         }
         .sheet(isPresented: $showingLeaderboard) {
             LeaderboardView(userProfiles: userProfiles)
@@ -779,7 +781,8 @@ struct ConfettiView: View {
 }
 
 struct HistoryView: View {
-    let profile: UserProfile
+    @Binding var profile: UserProfile
+    var onUpdate: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var showingChart = false
     
@@ -866,6 +869,7 @@ struct HistoryView: View {
                         }
                         .padding(.vertical, 4)
                     }
+                    .onDelete(perform: deleteRecords)
                 }
             }
             .navigationTitle("\(profile.name)'s History")
@@ -886,6 +890,25 @@ struct HistoryView: View {
         .sheet(isPresented: $showingChart) {
             ChartView(history: profile.history)
         }
+    }
+
+    private func deleteRecords(at offsets: IndexSet) {
+        let sorted = historySortedDesc
+        for offset in offsets {
+            let record = sorted[offset]
+            if let index = profile.history.firstIndex(where: { $0.id == record.id }) {
+                profile.history.remove(at: index)
+            }
+        }
+        recalcStats()
+        onUpdate()
+    }
+
+    private func recalcStats() {
+        profile.solveCount = profile.history.count
+        profile.totalTime = profile.history.reduce(0) { $0 + $1.time }
+        profile.bestTime = profile.history.map { $0.time }.min() ?? 0
+        profile.lastTime = profile.history.last?.time ?? 0
     }
     
 
