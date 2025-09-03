@@ -97,11 +97,13 @@ struct ContentView: View {
     @State private var confettiTrigger = 0
     @State private var showingHistory = false
     @State private var showingLeaderboard = false
-    
+    @State private var showingFirstUserAlert = false
+    @State private var newUserName = ""
+
     @AppStorage("userProfiles") private var userProfilesData: Data = Data()
     @AppStorage("currentUserId") private var currentUserId: String = ""
     @State private var userProfiles: [UserProfile] = []
-    @State private var currentProfile: UserProfile = UserProfile(name: "Default")
+    @State private var currentProfile: UserProfile = UserProfile(name: "")
     
     var averageTime: TimeInterval {
         guard currentProfile.solveCount > 0 else { return 0 }
@@ -340,6 +342,9 @@ struct ContentView: View {
         .sheet(isPresented: $showingLeaderboard) {
             LeaderboardView(userProfiles: userProfiles)
         }
+        .alert("New User", isPresented: $showingFirstUserAlert, actions: firstUserAlert) {
+            Text("Enter a name for your profile")
+        }
         .onAppear {
             loadProfiles()
         }
@@ -496,16 +501,11 @@ struct ContentView: View {
         }
         
         if userProfiles.isEmpty {
-            let defaultProfile = UserProfile(name: "Default")
-            userProfiles = [defaultProfile]
-            currentProfile = defaultProfile
-            currentUserId = defaultProfile.id.uuidString
-            saveProfiles()
+            showingFirstUserAlert = true
         } else if !currentUserId.isEmpty, let profile = userProfiles.first(where: { $0.id.uuidString == currentUserId }) {
             currentProfile = profile
         } else {
             currentProfile = userProfiles.first!
-            currentUserId = currentProfile.id.uuidString
             saveProfiles()
         }
     }
@@ -520,7 +520,23 @@ struct ContentView: View {
         }
         currentUserId = currentProfile.id.uuidString
     }
-    
+
+    @ViewBuilder
+    private func firstUserAlert() -> some View {
+        TextField("Name", text: $newUserName)
+        Button("Create") {
+            if !newUserName.trimmingCharacters(in: .whitespaces).isEmpty {
+                let newProfile = UserProfile(name: newUserName)
+                userProfiles = [newProfile]
+                currentProfile = newProfile
+                saveProfiles()
+                newUserName = ""
+            } else {
+                showingFirstUserAlert = true
+            }
+        }
+    }
+
     }
 
 struct CancelButton: View {
