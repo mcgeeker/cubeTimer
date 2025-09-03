@@ -228,15 +228,6 @@ struct ContentView: View {
                     
                     // Center Content
                     VStack(spacing: 25) {
-                        HStack {
-                            Spacer()
-                            Button(action: { showingSettings = true }) {
-                                Image(systemName: "gearshape.fill")
-                                    .font(.title2)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .padding(.top, 16)
                         
                         Spacer()
                         
@@ -301,6 +292,14 @@ struct ContentView: View {
                         }
                         
                         Spacer()
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        Button(action: { showingSettings = true }) {
+                            Image(systemName: "gearshape.fill")
+                                .font(.title2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(12)
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -856,9 +855,9 @@ struct HistoryView: View {
                 let isLandscape = geometry.size.width > geometry.size.height
                 let columns = Array(repeating: GridItem(.flexible()), count: isLandscape ? 3 : 2)
 
-                ScrollView {
-                    VStack(spacing: 0) {
-                        // Statistics Header
+                List {
+                    // Statistics Section
+                    Section {
                         VStack(spacing: 16) {
                             Text("Statistics Summary")
                                 .font(.title2)
@@ -867,7 +866,7 @@ struct HistoryView: View {
                             if profile.history.isEmpty {
                                 Text("No solves recorded yet")
                                     .foregroundColor(.secondary)
-                                    .padding()
+                                    .padding(.vertical)
                             } else {
                                 LazyVGrid(columns: columns, spacing: 12) {
                                     StatCard(title: "Best", value: formatTime(bestTimeComputed), color: .green)
@@ -879,38 +878,34 @@ struct HistoryView: View {
                                 }
                             }
                         }
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color.gray.opacity(0.1))
+                        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                    }
 
-                        // History List
+                    // History Section
+                    Section {
                         if historySortedDesc.isEmpty {
                             Text("No solve history available")
                                 .foregroundColor(.secondary)
-                                .padding()
                         } else {
-                            LazyVStack(spacing: 0) {
-                                ForEach(historySortedDesc) { record in
-                                    HStack {
-                                        VStack(alignment: .leading) {
-                                            Text(formatTime(record.time))
-                                                .font(.title3)
-                                                .fontWeight(.semibold)
-                                            Text(formatDate(record.date))
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-                                        Spacer()
-                                        if record.time == profile.bestTime {
-                                            Image(systemName: "crown.fill")
-                                                .foregroundColor(.yellow)
-                                        }
+                            ForEach(historySortedDesc) { record in
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(formatTime(record.time))
+                                            .font(.title3)
+                                            .fontWeight(.semibold)
+                                        Text(formatDate(record.date))
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
                                     }
-                                    .padding(.vertical, 4)
-                                    .padding(.horizontal)
-                                    Divider()
+                                    Spacer()
+                                    if record.time == profile.bestTime {
+                                        Image(systemName: "crown.fill")
+                                            .foregroundColor(.yellow)
+                                    }
                                 }
+                                .padding(.vertical, 4)
                             }
+                            .onDelete(perform: deleteRecords)
                         }
                     }
                 }
@@ -927,7 +922,6 @@ struct HistoryView: View {
                             dismiss()
                         }
                     }
-                    .onDelete(perform: deleteRecords)
                 }
             }
             .sheet(isPresented: $showingChart) {
