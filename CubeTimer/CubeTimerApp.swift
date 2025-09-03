@@ -7,6 +7,10 @@
 
 import SwiftUI
 
+#Preview {
+  ContentView()
+}
+
 @main
 struct CubeTimerApp: App {
     var body: some Scene {
