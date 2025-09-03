@@ -97,6 +97,7 @@ struct ContentView: View {
     @State private var confettiTrigger = 0
     @State private var showingHistory = false
     @State private var showingLeaderboard = false
+    @State private var isGuestMode = false
     
     @AppStorage("userProfiles") private var userProfilesData: Data = Data()
     @AppStorage("currentUserId") private var currentUserId: String = ""
@@ -292,7 +293,7 @@ struct ContentView: View {
         .sensoryFeedback(.impact(weight: .medium, intensity: 0.8), trigger: isRunning)
         .confettiCannon(counter: $confettiTrigger)
         .sheet(isPresented: $showingSettings) {
-            SettingsView(userProfiles: $userProfiles, currentProfile: $currentProfile) {
+            SettingsView(userProfiles: $userProfiles, currentProfile: $currentProfile, isGuestMode: $isGuestMode) {
                 saveProfiles()
             }
         }
@@ -422,6 +423,12 @@ struct ContentView: View {
 
         // Apply WCA +2 if pending
         let finalTime = currentTime + (pendingPenalty == .plus2 ? 2.0 : 0.0)
+
+        guard !isGuestMode else {
+            pendingPenalty = .none
+            return
+        }
+
         let isNewBest = currentProfile.bestTime == 0 || finalTime < currentProfile.bestTime
 
         currentProfile.lastTime = finalTime
@@ -502,6 +509,7 @@ struct StatCard: View {
 struct SettingsView: View {
     @Binding var userProfiles: [UserProfile]
     @Binding var currentProfile: UserProfile
+    @Binding var isGuestMode: Bool
     let onSave: () -> Void
     @Environment(\.dismiss) private var dismiss
     
@@ -558,6 +566,10 @@ struct SettingsView: View {
 
     private var userManagementSection: some View {
         Section("User Management") {
+            Button(isGuestMode ? "Disable Guest Mode" : "Enable Guest Mode") {
+                isGuestMode.toggle()
+            }
+
             Button("Add New User") {
                 showingNewUserAlert = true
             }
