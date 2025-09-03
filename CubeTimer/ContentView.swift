@@ -821,74 +821,87 @@ struct HistoryView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Statistics Header
-                VStack(spacing: 16) {
-                    Text("Statistics Summary")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    
-                    if profile.history.isEmpty {
-                        Text("No solves recorded yet")
-                            .foregroundColor(.secondary)
-                            .padding()
-                    } else {
-                        LazyVGrid(columns: [
-                            GridItem(.flexible()),
-                            GridItem(.flexible())
-                        ], spacing: 12) {
-                            StatCard(title: "Best", value: formatTime(bestTimeComputed), color: .green)
-                            StatCard(title: "Average", value: formatTime(averageTimeComputed), color: .blue)
-                            StatCard(title: "Median", value: formatTime(medianTimeComputed), color: .purple)
-                            StatCard(title: "Std Dev", value: formatTime(stdDevSampleComputed), color: .orange)
-                            StatCard(title: "Ao5", value: formatTimeOptional(rollingAoN(profile.history, N: 5)), color: .teal)
-                            StatCard(title: "Ao12", value: formatTimeOptional(rollingAoN(profile.history, N: 12)), color: .indigo)
+            GeometryReader { geometry in
+                let isLandscape = geometry.size.width > geometry.size.height
+                let columns = Array(repeating: GridItem(.flexible()), count: isLandscape ? 3 : 2)
+
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Statistics Header
+                        VStack(spacing: 16) {
+                            Text("Statistics Summary")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+
+                            if profile.history.isEmpty {
+                                Text("No solves recorded yet")
+                                    .foregroundColor(.secondary)
+                                    .padding()
+                            } else {
+                                LazyVGrid(columns: columns, spacing: 12) {
+                                    StatCard(title: "Best", value: formatTime(bestTimeComputed), color: .green)
+                                    StatCard(title: "Average", value: formatTime(averageTimeComputed), color: .blue)
+                                    StatCard(title: "Median", value: formatTime(medianTimeComputed), color: .purple)
+                                    StatCard(title: "Std Dev", value: formatTime(stdDevSampleComputed), color: .orange)
+                                    StatCard(title: "Ao5", value: formatTimeOptional(rollingAoN(profile.history, N: 5)), color: .teal)
+                                    StatCard(title: "Ao12", value: formatTimeOptional(rollingAoN(profile.history, N: 12)), color: .indigo)
+                                }
+                            }
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.gray.opacity(0.1))
+
+                        // History List
+                        if historySortedDesc.isEmpty {
+                            Text("No solve history available")
+                                .foregroundColor(.secondary)
+                                .padding()
+                        } else {
+                            LazyVStack(spacing: 0) {
+                                ForEach(historySortedDesc) { record in
+                                    HStack {
+                                        VStack(alignment: .leading) {
+                                            Text(formatTime(record.time))
+                                                .font(.title3)
+                                                .fontWeight(.semibold)
+                                            Text(formatDate(record.date))
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        Spacer()
+                                        if record.time == profile.bestTime {
+                                            Image(systemName: "crown.fill")
+                                                .foregroundColor(.yellow)
+                                        }
+                                    }
+                                    .padding(.vertical, 4)
+                                    .padding(.horizontal)
+                                    Divider()
+                                }
+                            }
                         }
                     }
                 }
-                .padding()
-                .background(Color.gray.opacity(0.1))
-                
-                // History List
-                List {
-                    ForEach(historySortedDesc) { record in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(formatTime(record.time))
-                                    .font(.title3)
-                                    .fontWeight(.semibold)
-                                Text(formatDate(record.date))
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            if record.time == profile.bestTime {
-                                Image(systemName: "crown.fill")
-                                    .foregroundColor(.yellow)
-                            }
+                .navigationTitle("\(profile.name)'s History")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Chart") {
+                            showingChart = true
                         }
-                        .padding(.vertical, 4)
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Done") {
+                            dismiss()
+                        }
                     }
                     .onDelete(perform: deleteRecords)
                 }
             }
-            .navigationTitle("\(profile.name)'s History")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Chart") {
-                        showingChart = true
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
+            .sheet(isPresented: $showingChart) {
+                ChartView(history: profile.history)
             }
-        }
-        .sheet(isPresented: $showingChart) {
-            ChartView(history: profile.history)
         }
     }
 
