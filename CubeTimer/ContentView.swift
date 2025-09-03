@@ -240,12 +240,18 @@ struct ContentView: View {
                                 .font(.title3)
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
-                            
+
                             Text(formatTime(isInspecting ? inspectionTime : currentTime))
                                 .font(.system(size: 56, weight: .light, design: .monospaced))
                                 .foregroundColor(getTimerColor())
                         }
-                        
+
+                        if isRunning {
+                            CancelButton(themeColor: selectedButtonColor) {
+                                cancelSolve()
+                            }
+                        }
+
                         if showingNewBest {
                             Text("🎉 NEW BEST TIME! 🎉")
                                 .font(.title2)
@@ -470,7 +476,19 @@ struct ContentView: View {
 
         saveProfiles()
     }
-    
+
+    private func cancelSolve() {
+        timer?.invalidate()
+        isRunning = false
+        currentTime = 0
+        startTime = nil
+        pendingPenalty = .none
+        isInspecting = false
+        readyToStart = false
+        leftButtonPressed = false
+        rightButtonPressed = false
+    }
+
     private func loadProfiles() {
         if let decoded = try? JSONDecoder().decode([UserProfile].self, from: userProfilesData) {
             userProfiles = decoded
@@ -504,6 +522,62 @@ struct ContentView: View {
     
     }
 
+struct CancelButton: View {
+    let themeColor: Color
+    let onCancel: () -> Void
+
+    @State private var progress: CGFloat = 0
+    @State private var timer: Timer?
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.red)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(themeColor)
+                    .frame(width: proxy.size.width * progress)
+            }
+            .overlay(
+                Text("Cancel")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            )
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if timer == nil {
+                            startTimer()
+                        }
+                    }
+                    .onEnded { _ in
+                        reset()
+                    }
+            )
+        }
+        .frame(height: 44)
+    }
+
+    private func startTimer() {
+        progress = 0
+        timer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { t in
+            progress += 0.01 / 2.0
+            if progress >= 1 {
+                t.invalidate()
+                timer = nil
+                onCancel()
+                progress = 0
+            }
+        }
+    }
+
+    private func reset() {
+        timer?.invalidate()
+        timer = nil
+        progress = 0
+    }
+}
 
 struct StatCard: View {
     let title: String
