@@ -117,6 +117,7 @@ struct ContentView: View {
     @State private var leftButtonPressed = false
     @State private var rightButtonPressed = false
     @State private var readyToStart = false
+    @State private var showingHelp = false
     @State private var showingSettings = false
     @State private var showingNewBest = false
     @State private var confettiTrigger = 0
@@ -154,16 +155,22 @@ struct ContentView: View {
             if geometry.size.width < geometry.size.height {
                 // Portrait - Show navigation and statistics, but not the timer
                 VStack(spacing: 25) {
-                    // Settings button
                     HStack {
+                        // Help button
+                        Button(action: { showingHelp = true }) {
+                            Image(systemName: "questionmark.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(.secondary)
+                        }
                         Spacer()
+                        // Settings button
                         Button(action: { showingSettings = true }) {
                             Image(systemName: "gearshape.fill")
                                 .font(.title2)
                                 .foregroundColor(.secondary)
                         }
                     }
-                    .padding(.top, 16)
+                    .padding(.top, 56)
 
                     Spacer()
 
@@ -213,7 +220,7 @@ struct ContentView: View {
                         .frame(width: 120)
                         .overlay(
                             Rectangle()
-                                .stroke(selectedButtonColor, lineWidth: 2)
+                                .stroke(selectedButtonColor, lineWidth: 0)
                         )
                         .contentShape(Rectangle())
                         .simultaneousGesture(
@@ -231,9 +238,9 @@ struct ContentView: View {
                         )
                     
                     // Center Content
-                    VStack(spacing: 25) {
+                    VStack(spacing: 0) {
                         
-                        Spacer()
+                         Spacer()
                         
                         // Timer Display
                         VStack(spacing: 15) {
@@ -298,7 +305,17 @@ struct ContentView: View {
                         
                         Spacer()
                     }
+                    .overlay(alignment: .topLeading) {
+                        // Help button
+                        Button(action: { showingHelp = true }) {
+                            Image(systemName: "questionmark.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(12)
+                    }
                     .overlay(alignment: .topTrailing) {
+                        // Settings button
                         Button(action: { showingSettings = true }) {
                             Image(systemName: "gearshape.fill")
                                 .font(.title2)
@@ -315,7 +332,7 @@ struct ContentView: View {
                         .frame(width: 120)
                         .overlay(
                             Rectangle()
-                                .stroke(selectedButtonColor, lineWidth: 2)
+                                .stroke(selectedButtonColor, lineWidth: 0)
                         )
                         .contentShape(Rectangle())
                         .simultaneousGesture(
@@ -338,6 +355,9 @@ struct ContentView: View {
         .idleTimerDisabled(isRunning)
         .sensoryFeedback(.impact(weight: .medium, intensity: 0.8), trigger: isRunning)
         .confettiCannon(counter: $confettiTrigger)
+        .sheet(isPresented: $showingHelp) {
+            HelpView()
+        }
         .sheet(isPresented: $showingSettings) {
             SettingsView(userProfiles: $userProfiles, currentProfile: $currentProfile, isGuestMode: $isGuestMode) {
                 saveProfiles()
@@ -635,6 +655,14 @@ struct StatCard: View {
     }
 }
 
+struct HelpView: View {
+    var body: some View {
+        NavigationStack {
+            Text("Hello World!")
+                .navigationTitle("Help")
+        }
+    }
+}
 struct SettingsView: View {
     @Binding var userProfiles: [UserProfile]
     @Binding var currentProfile: UserProfile

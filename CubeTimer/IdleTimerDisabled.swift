@@ -7,8 +7,8 @@ private struct IdleTimerDisabledModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onAppear { UIApplication.shared.isIdleTimerDisabled = disabled }
-            .onChange(of: disabled) { value in
-                UIApplication.shared.isIdleTimerDisabled = value
+            .onChange(of: disabled) {
+                UIApplication.shared.isIdleTimerDisabled = disabled
             }
             .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
     }
